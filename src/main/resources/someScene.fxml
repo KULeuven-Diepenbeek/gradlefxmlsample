@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+
+<AnchorPane prefHeight="247.0" prefWidth="293.0" xmlns="http://javafx.com/javafx/10.0.2-internal" xmlns:fx="http://javafx.com/fxml/1" fx:controller="be.kuleuven.SomeController">
+   <children>
+      <Button fx:id="button" layoutX="43.0" layoutY="35.0" mnemonicParsing="false" prefHeight="61.0" prefWidth="185.0" text="Click me" />
+      <TextField fx:id="text" layoutX="43.0" layoutY="124.0" prefHeight="33.0" prefWidth="185.0" />
+   </children>
+</AnchorPane>
