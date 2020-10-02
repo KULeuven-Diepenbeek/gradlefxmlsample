@@ -12,6 +12,10 @@ javafx {
     modules = [ 'javafx.controls', 'javafx.fxml' ]
 }
 
+dependencies {
+  implementation 'com.google.code.gson:gson:2.8.6'
+}
+
 // RUN: ./gradlew run (from application plugin)
 mainClassName = 'be.kuleuven.JavaFXMain'
 
