@@ -3,6 +3,7 @@ import sys
 import shutil
 import os
 import re
+import csv
 
 from pathlib import Path
 
@@ -37,8 +38,11 @@ class Converter():
 			found = re.findall(r"package\s(.+);", code)
 			return found[0]
 		def read_class(code):
-			found = re.findall(r"class\s(.+)\sextends", code)
-			return found[0]
+			for regex in [ r"class\s(.+)\sextends", r"public class\s(.+)\{", r"public class\s(.+)" ]:
+				found = re.findall(regex, code)
+				if len(found) > 0:
+					return found[0].strip()
+			raise Exception("No main class found")
 		def replace_main_class_name(to_replace, replace_with):
 			with open(self.src + "build.gradle", "r") as file:
 				data = file.read()
@@ -104,7 +108,12 @@ class Converter():
 	def fix_fximage_loads(self):
 		print("\t7. Fixing new Image(...) resource loads...")
 		
+		# possible formats:
+		# 	/Image/bla.png
+		#	file:dir\\subdir\\bla.png
 		def move_image_to_resource_dir(image_argument):
+			image_argument = image_argument.replace("file:src", "/").replace("\\\\", "/")
+
 			print("\t\tnew Image(\"" + image_argument + "\")")
 			dest = self.src + "src/main/resources" + image_argument
 			os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -132,8 +141,106 @@ class Converter():
 		print("Done! check out " + self.src)
 
 
+class MassConverter():
+	def __init__(self, convertdir):
+		self.convertdir = convertdir
+
+	def move_projects_to_root(self):
+		print("\tMoving project contents to root...")
+		for project in os.listdir(self.convertdir):
+			# 1. locate build.xml
+			# 2. take contents of build.xml dir and move to root
+			# 3. remove any subdir that's not src or test
+			rootdir = self.convertdir + "/" + project
+			globbuild = list(Path(rootdir).rglob('build.xml'))
+			if len(globbuild) > 0:
+				builddir = os.path.dirname(globbuild[0])
+
+				for dirfilename in os.listdir(builddir):
+					try:
+						shutil.move(os.path.join(builddir, dirfilename), rootdir)
+					except OSError as exc:
+						pass # already in root, don't care
+
+		print("\tDeleting every dir that's not src...")
+		for project in os.listdir(self.convertdir):
+			rootdir = self.convertdir + "/" + project
+			if os.path.isdir(rootdir):
+				for projectdir in os.listdir(rootdir):
+					todel = os.path.join(rootdir, projectdir)
+					if os.path.isdir(todel) and "src" not in todel:
+						print("\t\tRemoving " + todel)
+						shutil.rmtree(todel)
+
+	def anonymize_dirs(self):
+		print("\tAnonymizing student project dirs...")
+
+		def write_student_mapping(rows):
+			with open("student_mapping.csv", "w") as csvfile:
+				writer = csv.writer(csvfile)
+				writer.writerow(['studnr', 'aonymous_id'])
+				writer.writerows(rows)
+			print("\tstudent_mapping.csv written.")
+
+		def convert_studnr_to_i():
+			rows = []
+			i = 1
+			for project in os.listdir(self.convertdir):
+				rootdir = self.convertdir + "/" + project
+
+				if os.path.isdir(rootdir):
+					trystudnr = re.findall(r"Verplichte taak_o-(\d+)", project)
+					if len(trystudnr) > 0:
+						studnr = trystudnr[0]
+						print("\t\t" + str(studnr) + " => " + str(i))
+						rows.append([studnr, str(i)])
+
+						shutil.move(rootdir, self.convertdir + "/" + str(i))
+						if os.path.exists(self.convertdir + "/" + str(i) + "__MACOSX"):
+							print("\t\t\tWarning, __MACOSX garbage")
+							shutil.rmtree(self.convertdir + "/" + str(i) + "__MACOSX")
+
+						i = i + 1
+			return rows
+
+		rows = convert_studnr_to_i()
+		if len(rows) > 0:
+			write_student_mapping(rows)
+		self.move_projects_to_root()
+
+	def convert_each_project(self):
+		for project in os.listdir(self.convertdir):
+			rootdir = self.convertdir + "/" + project
+			if os.path.isdir(rootdir):
+				print("-- Converting " + project)
+				Converter(rootdir).convert()
+
+	def convert(self):
+		self.anonymize_dirs()
+		self.convert_each_project()
+
+
+
+# manual pre-processing:
+# ---
+# find . -name '*.zip' -exec sh -c 'unzip -d "${1%.*}" "$1"' _ {} \;
+# rm -rf *.zip
+# find . -name '*.rar' -exec sh -c 'unrar x "$1" "${1%.*}/"' _ {} \;
+# rm -rf *.rar
+# find . -name '*.7z' -exec sh -c '7z x "$1" "-o ${1%.*}/"' _ {} \;
+# rm -rf *.7z
+# find . -name ".DS_Store" -exec rm -rf {} \;
+# sudo find . -name ".git" -exec rm -rf {} \;
+# sudo find . -name ".gitignore" -exec rm -rf {} \;
+# chmod -R 777 gradebookdir
+
 if __name__ == "__main__":
 	if len(sys.argv) <= 1:
-		print("Forgot argument?")
+		print("Forgot argument? arg0: dir")
+		exit()
+	elif len(sys.argv) == 2:
+		MassConverter(sys.argv[1]).convert()
+		print("--- DONE! ")
 	else:
 		Converter(sys.argv[1]).convert()
+		print("--- DONE! ")
