@@ -9,6 +9,22 @@ from pathlib import Path
 
 ref_dir = "/Users/wgroeneveld/development/java/gradlefxmlsample/"
 
+# https://stackoverflow.com/questions/2319019/using-regex-to-remove-comments-from-source-files
+def remove_comments(string):
+    pattern = r"(\".*?(?<!\\)\"|\'.*?(?<!\\)\')|(/\*.*?\*/|//[^\r\n]*$)"
+    # first group captures quoted strings (double or single)
+    # second group captures comments (//single-line or /* multi-line */)
+    regex = re.compile(pattern, re.MULTILINE|re.DOTALL)
+    def _replacer(match):
+        # if the 2nd group (capturing comments) is not None,
+        # it means we have captured a non-quoted (real) comment string.
+        if match.group(2) is not None:
+            return "" # so we will return empty to remove the comment
+        else: # otherwise, we will return the 1st group
+            return match.group(1) # captured quoted-string
+    return regex.sub(_replacer, string)
+
+
 class Converter():
 	def __init__(self, src):
 		self.src = os.path.abspath(src) + "/"
@@ -117,7 +133,11 @@ class Converter():
 			print("\t\tnew Image(\"" + image_argument + "\")")
 			dest = self.src + "src/main/resources" + image_argument
 			os.makedirs(os.path.dirname(dest), exist_ok=True)
-			shutil.move(self.src + "src/main/java" + image_argument, dest)
+
+			try:
+				shutil.move(self.src + "src/main/java" + image_argument, dest)
+			except OSError as exc:
+				print("\t\t-- whoops, move gone wrong, already moved?")
 
 		for path in Path(self.src + "src/main/java").rglob('*.java'):
 			with open(path, "r") as file:
@@ -125,6 +145,14 @@ class Converter():
 				if "new Image(" in code:
 					for match in re.findall(r"new Image\(\"(.+)\"", code):
 						move_image_to_resource_dir(match)
+
+	def strip_comments(self):
+		print("\t8. Removing comments... ")
+		for path in Path(self.src + "src/main/java").rglob('*.java'):
+			with open(path, "r") as file:
+				code = remove_comments(file.read())
+			with open(path, "w") as writable:
+				writable.write(code)
 
 
 	def convert(self):
@@ -137,6 +165,7 @@ class Converter():
 		self.move_resource_files()
 		self.fix_class_resource_loading()
 		self.fix_fximage_loads()
+		self.strip_comments()
 
 		print("Done! check out " + self.src)
 
@@ -229,10 +258,10 @@ class MassConverter():
 # rm -rf *.rar
 # find . -name '*.7z' -exec sh -c '7z x "$1" "-o ${1%.*}/"' _ {} \;
 # rm -rf *.7z
-# find . -name ".DS_Store" -exec rm -rf {} \;
+# sudo find . -name ".DS_Store" -exec rm -rf {} \;
 # sudo find . -name ".git" -exec rm -rf {} \;
 # sudo find . -name ".gitignore" -exec rm -rf {} \;
-# chmod -R 777 gradebookdir
+# chmod -R 777 .
 
 if __name__ == "__main__":
 	if len(sys.argv) <= 1:
